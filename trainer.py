@@ -5,6 +5,7 @@ import datetime
 import os
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
+from arcface import ArcFaceModel
 
 def create_writer():
     now = '{0:%Y%m%d}'.format(datetime.datetime.now())
@@ -38,7 +39,7 @@ class Trainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.writer = create_writer()
-
+        
     def get_scheduler(self, scheduler_config):
         if scheduler_config['name'] == 'StepLR':
             lr_scheduler = StepLR(self.optimizer, 
@@ -51,7 +52,8 @@ class Trainer:
         else:
             raise Exception("Unavailable scheduler")
         return lr_scheduler
-    
+
+
     def train(self, 
               verbose = 0, 
               use_sam_optim = False,
@@ -74,4 +76,109 @@ class Trainer:
             print("Epoch: ", epoch+1)
             print("Training...")
             for idx, (images, y_train) in enumerate(self.train_loader):
+                images = images.to(self.device)
+                y_train=y_train.to(self.device)
+                y_pred = self.model(images)
+                if use_sam_optim:
+                    loss = self.sam_update(images, y_pred, y_train)                   
+                else:
+                    loss = self.update(y_pred, y_train)
+                if verbose > 1:
+                    print("iter ", idx, "Train loss: ", loss.item())
+                train_loss += loss.item()
+                if idx % 10 == 9:
+                    # log the training loss every 10 mini-batches
+                    self.writer.add_scalar('training loss',
+                                            train_loss / 10,
+                                            epoch * len(self.train_loader) + idx)
+            acc = []
+            val_loss = 0.0
+            print("Validating...")
+            for idx, (X_val, y_val) in enumerate(self.val_loader):
+                loss, correct = self.eval(X_val, y_val)
+                val_loss += loss.item()
+                acc.append(correct)
+                if idx % 10 == 9:
+                    # log the training loss every 10 mini-batches
+                    self.writer.add_scalar('validating loss',
+                                            val_loss / 10,
+                                            epoch * len(self.val_loader) + idx)
+            val_accuracy = sum(acc)/len(acc)
+            if val_accuracy>=best_acc:
+                best_model = self.model
+                best_acc = val_accuracy
+            else:
                 pass
+            train_loss = train_loss / len(self.train_loader)
+            val_loss = val_loss / len(self.val_loader)
+            if verbose > 0:
+                print("Epoch:{epoch} |train loss: {train_loss} |val loss: {val_loss} |val accuracy: {cur_acc} |best accuracy: {best_acc}"\
+                                                    .format(epoch=epoch+1, 
+                                                    train_loss=round(train_loss, 4), 
+                                                    val_loss=round(val_loss, 4),
+                                                    cur_acc=round(val_accuracy.item(), 4),
+                                                    best_acc=round(best_acc.item(), 4)))
+            if scheduler_config is not None:
+                lr_scheduler.step()
+        self.writer.close()
+        return best_model
+
+    def eval(self, X_val, y_val):
+        X_val = X_val.to(self.device)
+        y_val = y_val.to(self.device)
+        self.model.eval()
+        with torch.no_grad():
+            logits = self.model(X_val)
+            loss = self.loss_function(logits, y_val)
+            y_probs = torch.softmax(logits, dim = 1) 
+            correct = (torch.argmax(y_probs, dim = 1) == y_val).type(torch.FloatTensor)
+        return loss, correct.mean()
+
+    def save_trained_model(self, 
+                           trained_model: nn.Module = None, 
+                           prefix: str = None,
+                           backbone_name: str = None, 
+                           num_classes: int = 1000,
+                           split_modules: bool = False,
+                           extension: str = 'pth'):
+        now = '{0:%Y%m%d}'.format(datetime.datetime.now())
+        if not os.path.exists('./weights/'+now):
+            os.mkdir('./weights/'+now)
+        if split_modules:
+            path = 'weights/'+now+'/'+prefix+'_'+backbone_name+'_'+str(num_classes)+'ids_backbone.'+extension
+            torch.save(trained_model.backbone.state_dict(), path)
+            print('Model is saved at '+path)
+            try: 
+                path = 'weights/'+now+'/'+prefix+'_'+backbone_name+'_'+str(num_classes)+'ids_fc.'+extension
+                torch.save(trained_model.fc.state_dict(), path)
+                print('Model is saved at '+path)
+            except:
+                print("No fully connected layer found!")
+                self.save_trained_model(trained_model=trained_model,
+                                        prefix=prefix,
+                                        backbone_name=backbone_name,
+                                        num_classes=num_classes,
+                                        split_modules=False,
+                                        extension=extension)
+        else:
+            path = 'weights/'+now+'/'+prefix+'_'+backbone_name+'_'+str(num_classes)+'ids.'+extension
+            torch.save(trained_model.state_dict(), path)
+            print('Model is saved at '+path)
+
+    def update(self, y_pred, y_true):
+        loss = self.loss_function(y_pred, y_true)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return loss
+
+    def sam_update(self, image, y_pred, y_true): 
+        """
+        SAM needs two forward-backward passes to estime the "sharpness-aware" gradient
+        """
+        loss = self.loss_function(y_pred, y_true)
+        loss.backward()
+        self.optimizer.first_step(zero_grad=True)
+        self.loss_function(self.model(image), y_true).backward()  # make sure to do a full forward pass
+        self.optimizer.second_step(zero_grad=True)  
+        return loss

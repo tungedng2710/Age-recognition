@@ -22,7 +22,6 @@ class Modified_RexNet150(nn.Module):
         output = self.backbone(output)
         return output
 
-
 class Encoder(nn.Module):
     def __init__(self, num_kernels, kernel_size=3, bn=True, max_pool=True, maxpool_kernel_size=2):
         super().__init__()
@@ -53,8 +52,7 @@ class TwoStreamNetwork(nn.Module):
         self.context_encoding_module = Encoder(num_kernels)
         self.face_encoding_module = Modified_RexNet150()
         self.context_encoding_module = Modified_RexNet150()
-        self.attention_inference_module = Encoder(
-            [256, 128, 1], max_pool=False)
+        self.attention_inference_module = Encoder([256, 128, 1], max_pool=False)
 
     def forward(self, face, context):
         face = self.face_encoding_module(face)
@@ -63,12 +61,10 @@ class TwoStreamNetwork(nn.Module):
         N, C, H, W = attention.shape
         attention = F.softmax(attention.view(N, -1), dim=-1).view(N, C, H, W)
         context = context * attention
-
         return face, context
 
-
 class FusionNetwork(nn.Module):
-    def __init__(self, use_face=True, use_context=True, concat=False, num_class=7):
+    def __init__(self, use_face=True, use_context=False, concat=False, num_class=5):
         super().__init__()
         # add batch norm to ensure the mean and std of 
         # face and context features are not too different
@@ -107,19 +103,15 @@ class FusionNetwork(nn.Module):
             weights = F.softmax(weights, dim=-1)
             face = face * weights[:, 0].unsqueeze(dim=-1)
             context = context * weights[:, 1].unsqueeze(dim=-1)
-
         if not self.use_face:
             face = torch.zeros_like(face)
-
         if not self.use_context:
             context = torch.zeros_like(context)
 
         features = torch.cat([face, context], dim=-1)
         features = F.relu(self.fc1(features))
         features = self.dropout(features)
-
         return self.fc2(features)
-
 
 class CAERSNet(BaseModel):
     def __init__(self, use_face=True, use_context=True, concat=False):
@@ -129,9 +121,7 @@ class CAERSNet(BaseModel):
 
     def forward(self, face=None, context=None):
         face, context = self.two_stream_net(face, context)
-
         return self.fusion_net(face, context)
-
 
 if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -140,5 +130,5 @@ if __name__ == "__main__":
     # model.eval()
     dummy_face = torch.rand(2, 3, 200, 200).to(device)
     dummy_context = torch.rand(2, 3, 224, 224).to(device)
-    output = model(dummy_face, dummy_context)
+    output = model(face=dummy_face)
     print(output.shape)
