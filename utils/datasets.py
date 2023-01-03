@@ -37,6 +37,7 @@ class UTKFace(Dataset):
             return 4
     
     def __getitem__(self, index: int = 0):
+        dummy_context = torch.rand(3, 224, 224)
         file_name = self.file_names[index]
         image_path = os.path.join(self.root_dir, file_name)
         image = Image.open(image_path)
@@ -56,8 +57,8 @@ class FaceDataloader:
                  dataset = None, 
                  dataset_ratio = None,
                  random_seed = 0,
-                 batch_size_train = 32,
-                 batch_size_val = 32):
+                 batch_size_train = 16,
+                 batch_size_val = 16):
         torch.manual_seed(random_seed)
         if dataset_ratio is None:
             dataset_ratio = [0.8, 0.2]

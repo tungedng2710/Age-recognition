@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.models.layers import ConvNormAct, BatchNormAct2d
-from base_model import BaseModel
+from .base_model import BaseModel
 # from rexnet import *
 
 class Modified_RexNet150(nn.Module):

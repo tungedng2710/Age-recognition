@@ -5,12 +5,11 @@ import datetime
 import os
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-from arcface import ArcFaceModel
 
 def create_writer():
     now = '{0:%Y%m%d}'.format(datetime.datetime.now())
     if not os.path.exists('./logs/'+now):
-        os.mkdir('./logs/'+now)
+        os.makedirs('./logs/'+now)
     path = './logs/'+now+'/'
     writer = SummaryWriter(path)
     return writer
@@ -88,7 +87,7 @@ class Trainer:
                 train_loss += loss.item()
                 if idx % 10 == 9:
                     # log the training loss every 10 mini-batches
-                    self.writer.add_scalar('training loss',
+                    self.writer.add_scalar('training loss', 
                                             train_loss / 10,
                                             epoch * len(self.train_loader) + idx)
             acc = []
