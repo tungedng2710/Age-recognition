@@ -153,3 +153,6 @@ class Lamb(torch.optim.Optimizer):
                 p.data.add_(-group['lr'] * trust_ratio, adam_step)
 
         return loss
+
+# def get_optimizer(name: str = "adam"):
+#     if name == "sam":

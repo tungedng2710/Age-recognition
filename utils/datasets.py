@@ -22,7 +22,7 @@ class UTKFace(Dataset):
                                   std = [0.229, 0.224, 0.225]),
             ])
         self.file_names = os.listdir(self.root_dir)            
-        self.num_classes = 5
+        self.num_classes = 6
 
     def make_label(self, actual_age: int = 0):
         if actual_age >= 0 and actual_age < 13:
@@ -33,17 +33,18 @@ class UTKFace(Dataset):
             return 2
         elif actual_age >= 45 and actual_age < 66:
             return 3
-        else:
+        elif actual_age >= 66 and actual_age < 85:
             return 4
+        else:
+            return 5
     
     def __getitem__(self, index: int = 0):
-        dummy_context = torch.rand(3, 224, 224)
         file_name = self.file_names[index]
         image_path = os.path.join(self.root_dir, file_name)
         image = Image.open(image_path)
         image = self.transform(image)
         actual_age = int(file_name.split('_')[0])
-        return image, self.make_label(actual_age)
+        return image, self.make_label(int(actual_age))
 
     def __len__(self):
         return len(self.file_names)
@@ -60,8 +61,8 @@ class FaceDataloader:
                  batch_size_train = 16,
                  batch_size_val = 16):
         torch.manual_seed(random_seed)
-        if dataset_ratio is None:
-            dataset_ratio = [0.8, 0.2]
+        if dataset_ratio is None or sum(dataset_ratio) != 1.0:
+            dataset_ratio = [0.7, 0.3]
         self.dataset = dataset
         self.num_classes = self.dataset.num_classes
         self.train_set, self.val_set = torch.utils.data.random_split(self.dataset, dataset_ratio)

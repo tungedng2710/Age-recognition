@@ -8,20 +8,6 @@ from collections import namedtuple
 
 # Support: ['IR_50', 'IR_101', 'IR_152', 'IR_SE_50', 'IR_SE_101', 'IR_SE_152']
 
-class NormalizedLinear(nn.Module):
-    """
-    Linear layer for classification 
-    """
-    def __init__(self, in_features, out_features):
-        super(NormalizedLinear, self).__init__()
-        self.W = nn.Parameter(torch.FloatTensor(out_features, in_features))
-        nn.init.xavier_uniform_(self.W)
-
-    def forward(self, input):
-        x = F.normalize(input)
-        W = F.normalize(self.W)
-        return F.linear(x, W)
-
 class Flatten(Module):
     def forward(self, input):
         return input.view(input.size(0), -1)
@@ -177,13 +163,11 @@ class Backbone(Module):
         self.body = Sequential(*modules)
 
         self._initialize_weights()
-        self.head = NormalizedLinear(in_features=512, out_features=5)
 
     def forward(self, x):
         x = self.input_layer(x)
         x = self.body(x)
         x = self.output_layer(x)
-        x = self.head(x)
         return x
 
     def _initialize_weights(self):

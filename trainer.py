@@ -4,6 +4,7 @@ from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
 import datetime
 import os
 from tqdm import tqdm
+from time import sleep
 from torch.utils.tensorboard import SummaryWriter
 
 def create_writer():
@@ -42,28 +43,20 @@ class Trainer:
     def get_scheduler(self, scheduler_config):
         if scheduler_config['name'] == 'StepLR':
             lr_scheduler = StepLR(self.optimizer, 
-                                step_size=scheduler_config['StepLR']['step_size'], 
-                                gamma=scheduler_config['StepLR']['gamma'],
-                                verbose=scheduler_config['StepLR']['verbose'])
-        elif scheduler_config['name'] == 'CosineAnnealingLR':
+                                 step_size=scheduler_config["StepLR"]["step_size"], 
+                                 gamma=scheduler_config["StepLR"]["gamma"],
+                                 verbose=scheduler_config["StepLR"]["verbose"])
+        elif scheduler_config["name"] == "CosineAnnealingLR":
             lr_scheduler = CosineAnnealingLR(self.optimizer, 
-                                             T_max=scheduler_config['CosineAnnealingLR']['T_max'])
+                                             T_max=scheduler_config["CosineAnnealingLR"]["T_max"])
         else:
             raise Exception("Unavailable scheduler")
         return lr_scheduler
 
 
-    def train(self, 
-              verbose = 0, 
+    def train(self,
               use_sam_optim = False,
               scheduler_config = None):
-        '''
-        verbose: 
-            0: show nothing
-            1: show results per epoch only
-            2: show train losses per iteration
-        use_sam_optim: True if using SAM Optimizer
-        '''
         best_model = self.model
         best_acc = -1
         train_loss = 0.0
@@ -74,7 +67,10 @@ class Trainer:
             print("--------------------------------------------------------------------------")
             print("Epoch: ", epoch+1)
             print("Training...")
-            for idx, (images, y_train) in enumerate(self.train_loader):
+            train_acc = []
+            pbar = enumerate(self.train_loader)
+            pbar = tqdm(pbar, total=len(self.train_loader))
+            for idx, (images, y_train) in pbar:
                 images = images.to(self.device)
                 y_train=y_train.to(self.device)
                 y_pred = self.model(images)
@@ -82,8 +78,13 @@ class Trainer:
                     loss = self.sam_update(images, y_pred, y_train)                   
                 else:
                     loss = self.update(y_pred, y_train)
-                if verbose > 1:
-                    print("iter ", idx, "Train loss: ", loss.item())
+                y_probs = torch.softmax(y_pred, dim = 1) 
+                correct = (torch.argmax(y_probs, dim = 1) == y_train).type(torch.FloatTensor)
+                train_acc.append(correct.mean())
+                train_accuracy = sum(train_acc)/len(train_acc)
+                info = "train loss: {train_loss} | train acc: {train_acc}"\
+                       .format(train_loss = round(loss.item(), 2), train_acc = round(train_accuracy.item(), 2))
+                pbar.set_description(info)
                 train_loss += loss.item()
                 if idx % 10 == 9:
                     # log the training loss every 10 mini-batches
@@ -93,7 +94,9 @@ class Trainer:
             acc = []
             val_loss = 0.0
             print("Validating...")
-            for idx, (X_val, y_val) in enumerate(self.val_loader):
+            pbar = enumerate(self.val_loader)
+            pbar = tqdm(pbar, total=len(self.val_loader))
+            for idx, (X_val, y_val) in pbar:
                 loss, correct = self.eval(X_val, y_val)
                 val_loss += loss.item()
                 acc.append(correct)
@@ -103,15 +106,14 @@ class Trainer:
                                             val_loss / 10,
                                             epoch * len(self.val_loader) + idx)
             val_accuracy = sum(acc)/len(acc)
-            if val_accuracy>=best_acc:
+            if val_accuracy >= best_acc:
                 best_model = self.model
                 best_acc = val_accuracy
             else:
                 pass
             train_loss = train_loss / len(self.train_loader)
             val_loss = val_loss / len(self.val_loader)
-            if verbose > 0:
-                print("Epoch:{epoch} |train loss: {train_loss} |val loss: {val_loss} |val accuracy: {cur_acc} |best accuracy: {best_acc}"\
+            print("Epoch:{epoch} |train loss: {train_loss} |val loss: {val_loss} |val accuracy: {cur_acc} |best accuracy: {best_acc}"\
                                                     .format(epoch=epoch+1, 
                                                     train_loss=round(train_loss, 4), 
                                                     val_loss=round(val_loss, 4),
@@ -135,14 +137,13 @@ class Trainer:
 
     def save_trained_model(self, 
                            trained_model: nn.Module = None, 
-                           prefix: str = None,
+                           prefix: str = "UTKFace",
                            backbone_name: str = None, 
-                           num_classes: int = 1000,
-                           split_modules: bool = False,
+                           num_classes: int = 5,
                            extension: str = 'pth'):
         now = '{0:%Y%m%d}'.format(datetime.datetime.now())
         if not os.path.exists('./weights/'+now):
-            os.mkdir('./weights/'+now)
+            os.makedirs('./weights/'+now)
         if split_modules:
             path = 'weights/'+now+'/'+prefix+'_'+backbone_name+'_'+str(num_classes)+'ids_backbone.'+extension
             torch.save(trained_model.backbone.state_dict(), path)
@@ -157,7 +158,6 @@ class Trainer:
                                         prefix=prefix,
                                         backbone_name=backbone_name,
                                         num_classes=num_classes,
-                                        split_modules=False,
                                         extension=extension)
         else:
             path = 'weights/'+now+'/'+prefix+'_'+backbone_name+'_'+str(num_classes)+'ids.'+extension

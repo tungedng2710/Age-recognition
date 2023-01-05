@@ -1,0 +1,27 @@
+root_dir: "./data/UTKFace"
+model: "vit" # irse50 or rexnetv1
+input_size: 112
+dataset_ratio: [0.85, 0.15]
+batch_size_train: 4
+batch_size_val: 4
+lr: 0.0005
+num_epochs: 30
+scheduler:
+  name: "StepLR"
+  StepLR:                                                                                                                                                                      
+    step_size: 5
+    gamma: 0.8
+    verbose: false
+  CosineAnnealingLR:
+    T_max: 10
+optimizer: "adam"
+sam:
+  momentum: 0.9
+  rho: 0.05
+  adaptive: true
+adan:
+  beta1: 0.02
+  beta2: 0.08
+  beta3: 0.01
+  weight_decay: 0.02
+  
