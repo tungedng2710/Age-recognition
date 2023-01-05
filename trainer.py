@@ -1,10 +1,9 @@
-import torch
-import torch.nn as nn
-from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
 import datetime
 import os
 from tqdm import tqdm
-from time import sleep
+import torch
+import torch.nn as nn
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 
 def create_writer():
@@ -39,20 +38,19 @@ class Trainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.writer = create_writer()
-        
+
     def get_scheduler(self, scheduler_config):
         if scheduler_config['name'] == 'StepLR':
-            lr_scheduler = StepLR(self.optimizer, 
-                                 step_size=scheduler_config["StepLR"]["step_size"], 
+            lr_scheduler = StepLR(self.optimizer,
+                                 step_size=scheduler_config["StepLR"]["step_size"],
                                  gamma=scheduler_config["StepLR"]["gamma"],
                                  verbose=scheduler_config["StepLR"]["verbose"])
         elif scheduler_config["name"] == "CosineAnnealingLR":
-            lr_scheduler = CosineAnnealingLR(self.optimizer, 
+            lr_scheduler = CosineAnnealingLR(self.optimizer,
                                              T_max=scheduler_config["CosineAnnealingLR"]["T_max"])
         else:
-            raise Exception("Unavailable scheduler")
+            raise Exception("Unsupported scheduler, you should add it manually")
         return lr_scheduler
-
 
     def train(self,
               use_sam_optim = False,
@@ -75,10 +73,10 @@ class Trainer:
                 y_train=y_train.to(self.device)
                 y_pred = self.model(images)
                 if use_sam_optim:
-                    loss = self.sam_update(images, y_pred, y_train)                   
+                    loss = self.sam_update(images, y_pred, y_train)
                 else:
                     loss = self.update(y_pred, y_train)
-                y_probs = torch.softmax(y_pred, dim = 1) 
+                y_probs = torch.softmax(y_pred, dim = 1)
                 correct = (torch.argmax(y_probs, dim = 1) == y_train).type(torch.FloatTensor)
                 train_acc.append(correct.mean())
                 train_accuracy = sum(train_acc)/len(train_acc)
@@ -114,8 +112,8 @@ class Trainer:
             train_loss = train_loss / len(self.train_loader)
             val_loss = val_loss / len(self.val_loader)
             print("Epoch:{epoch} |train loss: {train_loss} |val loss: {val_loss} |val accuracy: {cur_acc} |best accuracy: {best_acc}"\
-                                                    .format(epoch=epoch+1, 
-                                                    train_loss=round(train_loss, 4), 
+                                                    .format(epoch=epoch+1,
+                                                    train_loss=round(train_loss, 4),
                                                     val_loss=round(val_loss, 4),
                                                     cur_acc=round(val_accuracy.item(), 4),
                                                     best_acc=round(best_acc.item(), 4)))
@@ -131,34 +129,33 @@ class Trainer:
         with torch.no_grad():
             logits = self.model(X_val)
             loss = self.loss_function(logits, y_val)
-            y_probs = torch.softmax(logits, dim = 1) 
+            y_probs = torch.softmax(logits, dim = 1)
             correct = (torch.argmax(y_probs, dim = 1) == y_val).type(torch.FloatTensor)
         return loss, correct.mean()
 
-    def save_trained_model(self, 
-                           trained_model: nn.Module = None, 
+    def save_trained_model(self,
+                           trained_model: nn.Module = None,
                            prefix: str = "UTKFace",
-                           backbone_name: str = None, 
+                           backbone_name: str = None,
                            num_classes: int = 5,
                            extension: str = 'pth'):
         now = '{0:%Y%m%d}'.format(datetime.datetime.now())
         if not os.path.exists('./weights/'+now):
             os.makedirs('./weights/'+now)
-        if split_modules:
-            path = 'weights/'+now+'/'+prefix+'_'+backbone_name+'_'+str(num_classes)+'ids_backbone.'+extension
-            torch.save(trained_model.backbone.state_dict(), path)
+        path = 'weights/'+now+'/'+prefix+'_'+backbone_name+'_'+str(num_classes)+'ids_backbone.'+extension
+        torch.save(trained_model.backbone.state_dict(), path)
+        print('Model is saved at '+path)
+        try:
+            path = 'weights/'+now+'/'+prefix+'_'+backbone_name+'_'+str(num_classes)+'ids_fc.'+extension
+            torch.save(trained_model.fc.state_dict(), path)
             print('Model is saved at '+path)
-            try: 
-                path = 'weights/'+now+'/'+prefix+'_'+backbone_name+'_'+str(num_classes)+'ids_fc.'+extension
-                torch.save(trained_model.fc.state_dict(), path)
-                print('Model is saved at '+path)
-            except:
-                print("No fully connected layer found!")
-                self.save_trained_model(trained_model=trained_model,
-                                        prefix=prefix,
-                                        backbone_name=backbone_name,
-                                        num_classes=num_classes,
-                                        extension=extension)
+        except:
+            print("No fully connected layer found!")
+            self.save_trained_model(trained_model=trained_model,
+                                    prefix=prefix,
+                                    backbone_name=backbone_name,
+                                    num_classes=num_classes,
+                                    extension=extension)
         else:
             path = 'weights/'+now+'/'+prefix+'_'+backbone_name+'_'+str(num_classes)+'ids.'+extension
             torch.save(trained_model.state_dict(), path)
@@ -171,7 +168,7 @@ class Trainer:
         self.optimizer.step()
         return loss
 
-    def sam_update(self, image, y_pred, y_true): 
+    def sam_update(self, image, y_pred, y_true):
         """
         SAM needs two forward-backward passes to estime the "sharpness-aware" gradient
         """
@@ -179,5 +176,5 @@ class Trainer:
         loss.backward()
         self.optimizer.first_step(zero_grad=True)
         self.loss_function(self.model(image), y_true).backward()  # make sure to do a full forward pass
-        self.optimizer.second_step(zero_grad=True)  
+        self.optimizer.second_step(zero_grad=True)
         return loss

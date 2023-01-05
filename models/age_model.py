@@ -57,7 +57,8 @@ class TonNet(nn.Module):
             self.backbone = convnext_tiny(num_classes=512) # 512 is the length of embedding vector
         else:
             print("{model_name} is not supported".format(model_name=model_name))
-        self.head = NormalizedLinear(in_features=512, out_features=num_classes)
+        # self.head = NormalizedLinear(in_features=512, out_features=num_classes)
+        self.head = nn.Linear(in_features=512, out_features=num_classes)
 
     def forward(self, input):
         output = self.backbone(input)

@@ -1,20 +1,20 @@
 root_dir: "./data/UTKFace"
-model: "vit" # irse50 or rexnetv1
+model: "mobilenet" # irse50 or rexnetv1
 input_size: 112
 dataset_ratio: [0.85, 0.15]
-batch_size_train: 4
-batch_size_val: 4
-lr: 0.0005
+batch_size_train: 128
+batch_size_val: 128
+lr: 0.001
 num_epochs: 30
 scheduler:
   name: "StepLR"
   StepLR:                                                                                                                                                                      
-    step_size: 5
+    step_size: 10
     gamma: 0.8
     verbose: false
   CosineAnnealingLR:
     T_max: 10
-optimizer: "adam"
+optimizer: "sgd"
 sam:
   momentum: 0.9
   rho: 0.05
