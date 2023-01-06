@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn import Linear, Conv2d, BatchNorm1d, BatchNorm2d, PReLU, ReLU, Sigmoid, Dropout, MaxPool2d, \
     AdaptiveAvgPool2d, Sequential, Module
 from collections import namedtuple
 
 
 # Support: ['IR_50', 'IR_101', 'IR_152', 'IR_SE_50', 'IR_SE_101', 'IR_SE_152']
+
 
 class Flatten(Module):
     def forward(self, input):
@@ -168,6 +168,7 @@ class Backbone(Module):
         x = self.input_layer(x)
         x = self.body(x)
         x = self.output_layer(x)
+
         return x
 
     def _initialize_weights(self):

@@ -4,7 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .backbones.irse import IR_50, IR_SE_50, IR_101, IR_SE_101
 from .backbones.mobilenet import MobileFaceNet
-from .backbones.vit import ViT_face
+from .backbones.vit import VisionTransformer
+from .backbones.convnext import convnext_tiny
 
 class NormalizedLinear(nn.Module):
     """
@@ -33,28 +34,26 @@ class TonNet(nn.Module):
         """
         super().__init__()
         if "irse" in model_name:
-            input_size = [num_classes for i in range(2)]
+            input_size = [input_size for i in range(2)]
             if "50" in model_name:
                 self.backbone = IR_SE_50(input_size=input_size)
             else:
                 self.backbone = IR_SE_101(input_size=input_size)
         elif "rexnet" in model_name:
-            self.backbone = timm.create_model('rexnet_150', num_classes=512)
+            self.backbone = timm.create_model('rexnet_150', num_classes=num_classes)
         elif "mobilenet" in model_name:
             self.backbone = MobileFaceNet(embedding_size=512,
                                           out_h=7,
                                           out_w=7)
         elif "vit" in model_name:
-            self.backbone = ViT_face(image_size=112,
-                                     patch_size=8,
-                                     dim=512,
-                                     depth=10,
-                                     heads=8,
-                                     mlp_dim=2048,
-                                     dropout=0.1,
-                                     emb_dropout=0.1)
-        elif backbone_name == 'convnext':
-            self.backbone = convnext_tiny(num_classes=512) # 512 is the length of embedding vector
+            self.backbone = VisionTransformer(img_size=input_size,
+                                              patch_size=8,
+                                              embed_dim=512,
+                                              num_heads=12,
+                                              mlp_ratio=4,
+                                              drop_rate=0.1)
+        elif "convnext" in model_name:
+            self.backbone = convnext_tiny(num_classes=512)
         else:
             print("{model_name} is not supported".format(model_name=model_name))
         # self.head = NormalizedLinear(in_features=512, out_features=num_classes)
@@ -62,5 +61,5 @@ class TonNet(nn.Module):
 
     def forward(self, input):
         output = self.backbone(input)
-        output = self.head(output)
+        # output = self.head(output)
         return output

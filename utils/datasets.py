@@ -6,23 +6,31 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+from face_detector import detect
 
 class UTKFace(Dataset):
     def __init__(self,
-                 root_dir: str = "age_data/UTKFace",
-                 sample_size: int = 200):
+                 root_dir: str = "./data/UTKFace",
+                 sample_size: int = 200,
+                 mode: str = "train",
+                 use_context: bool = False):
         super(UTKFace, self).__init__()
+        """
+        mode (str): train or val
+        """
         self.root_dir = root_dir
         self.transform = transforms.Compose(
             [
-             transforms.Resize(size=sample_size),
+             transforms.Resize((sample_size, sample_size)),
              transforms.RandomHorizontalFlip(),
              transforms.ToTensor(),
              transforms.Normalize(mean = [0.485, 0.456, 0.406],
                                   std = [0.229, 0.224, 0.225]),
             ])
-        self.file_names = os.listdir(self.root_dir)            
+        self.file_names = os.listdir(os.path.join(self.root_dir, mode))            
         self.num_classes = 6
+        self.use_context = use_context
+        self.mode = mode
 
     def make_label(self, actual_age: int = 0):
         if actual_age >= 0 and actual_age < 13:
@@ -40,11 +48,31 @@ class UTKFace(Dataset):
     
     def __getitem__(self, index: int = 0):
         file_name = self.file_names[index]
-        image_path = os.path.join(self.root_dir, file_name)
-        image = Image.open(image_path)
-        image = self.transform(image)
+        aligned_face_name = file_name + ".chip.jpg"
+        image_path = os.path.join(self.root_dir, self.mode, file_name)
+        cropped_image_path = os.path.join(self.root_dir, "cropped", aligned_face_name)
         actual_age = int(file_name.split('_')[0])
-        return image, self.make_label(int(actual_age))
+        label = self.make_label(int(actual_age))
+        if self.use_context:
+            image, detections = detect(image_path)
+            context = image.copy()
+            detection = detections[0] # make sure that there is one face per image
+            # crop face and mask the image to get context
+            xmin = int(detection[0])
+            ymin = int(detection[1])
+            xmax = int(detection[2])
+            ymax = int(detection[3])
+            face = image[ymin:ymax, xmin:xmax, :]
+            context[ymin:ymax, xmin:xmax, :] = 0
+            # BGR to RGB
+            # face = Image.fromarray(face[:, :, ::-1]).convert('RGB')
+            face = Image.open(cropped_image_path).convert('RGB')
+            context = Image.fromarray(context[:, :, ::-1]).convert('RGB')
+            return face, context, label
+        else:
+            image = Image.open(image_path).convert('RGB')
+            image = self.transform(image)
+            return image, label
 
     def __len__(self):
         return len(self.file_names)
@@ -54,18 +82,16 @@ class MegaAgeAsian(Dataset):
         pass
 
 class FaceDataloader:
-    def __init__(self, 
-                 dataset = None, 
+    def __init__(self,
+                 train_set = None,
+                 val_set = None,
                  dataset_ratio = None,
                  random_seed = 0,
                  batch_size_train = 16,
                  batch_size_val = 16):
         torch.manual_seed(random_seed)
-        if dataset_ratio is None or sum(dataset_ratio) != 1.0:
-            dataset_ratio = [0.7, 0.3]
-        self.dataset = dataset
-        self.num_classes = self.dataset.num_classes
-        self.train_set, self.val_set = torch.utils.data.random_split(self.dataset, dataset_ratio)
+        self.train_set = train_set
+        self.val_set = val_set
         self.batch_size_train = batch_size_train
         self.batch_size_val = batch_size_val
 
@@ -80,9 +106,3 @@ class FaceDataloader:
                                 shuffle = False,
                                 num_workers = num_worker)
         return train_loader, val_loader
-
-if __name__ == "__main__":
-    dataset = UTKFace(root_dir="../data/UTKFace")
-    dataloader = FaceDataloader(dataset)
-    train_loader, val_loader = dataloader.get_dataloaders()
-

@@ -42,9 +42,9 @@ class Trainer:
     def get_scheduler(self, scheduler_config):
         if scheduler_config['name'] == 'StepLR':
             lr_scheduler = StepLR(self.optimizer,
-                                 step_size=scheduler_config["StepLR"]["step_size"],
-                                 gamma=scheduler_config["StepLR"]["gamma"],
-                                 verbose=scheduler_config["StepLR"]["verbose"])
+                                  step_size=scheduler_config["StepLR"]["step_size"],
+                                  gamma=scheduler_config["StepLR"]["gamma"],
+                                  verbose=scheduler_config["StepLR"]["verbose"])
         elif scheduler_config["name"] == "CosineAnnealingLR":
             lr_scheduler = CosineAnnealingLR(self.optimizer,
                                              T_max=scheduler_config["CosineAnnealingLR"]["T_max"])

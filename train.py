@@ -28,15 +28,20 @@ def train(parsing_args):
     with open(parsing_args.config) as stream:
         configs = yaml.safe_load(stream)
     device = torch.device("cuda:" + parsing_args.device if torch.cuda.is_available() else "cpu")
-    dataset = UTKFace(root_dir=configs["root_dir"],
+    train_set = UTKFace(root_dir=configs["root_dir"],
+                        mode="train",
+                        sample_size=configs["input_size"])
+    val_set = UTKFace(root_dir=configs["root_dir"],
+                      mode="val",
                       sample_size=configs["input_size"])
-    dataloader = FaceDataloader(dataset=dataset,
-                                dataset_ratio=configs["dataset_ratio"],
+    assert train_set.num_classes == val_set.num_classes
+    dataloader = FaceDataloader(train_set=train_set,
+                                val_set=val_set,
                                 batch_size_train=configs["batch_size_train"],
                                 batch_size_val=configs["batch_size_val"])
     train_loader, val_loader = dataloader.get_dataloaders(num_worker=8)
 
-    model = TonNet(model_name=configs["model"], num_classes=dataset.num_classes)
+    model = TonNet(model_name=configs["model"], num_classes=train_set.num_classes)
     if configs["optimizer"] == "sgd":
         optimizer = torch.optim.SGD(model.parameters(), lr=configs["lr"], momentum=0.9)
     elif configs["optimizer"] == "adam":
@@ -59,5 +64,11 @@ def train(parsing_args):
                                    backbone_name=configs["model"])
 
 if __name__ == "__main__":
-    args = get_args()
-    train(parsing_args=args)
+    # args = get_args()
+    # train(parsing_args=args)
+    dataset = UTKFace(root_dir="./data/UTKFace",
+                      mode = "train",
+                      sample_size=224,
+                      use_context=True)
+    dataset[0][1].show()
+    dataset[0][0].show()
