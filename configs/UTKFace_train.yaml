@@ -3,6 +3,7 @@ model: "mobilenet"
 input_size: 112
 batch_size_train: 128
 batch_size_val: 128
+use_context: true
 lr: 0.001
 num_epochs: 30
 scheduler:

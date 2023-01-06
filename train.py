@@ -9,6 +9,7 @@ from trainer import Trainer
 from utils.datasets import UTKFace, FaceDataloader
 from utils.losses import get_loss
 from models.age_model import TonNet
+from models.caer import CAERSNet
 
 def get_args():
     """
@@ -30,10 +31,12 @@ def train(parsing_args):
     device = torch.device("cuda:" + parsing_args.device if torch.cuda.is_available() else "cpu")
     train_set = UTKFace(root_dir=configs["root_dir"],
                         mode="train",
-                        sample_size=configs["input_size"])
+                        sample_size=configs["input_size"],
+                        use_context=configs["use_context"])
     val_set = UTKFace(root_dir=configs["root_dir"],
                       mode="val",
-                      sample_size=configs["input_size"])
+                      sample_size=configs["input_size"],
+                      use_context=configs["use_context"])
     assert train_set.num_classes == val_set.num_classes
     dataloader = FaceDataloader(train_set=train_set,
                                 val_set=val_set,
@@ -41,6 +44,10 @@ def train(parsing_args):
                                 batch_size_val=configs["batch_size_val"])
     train_loader, val_loader = dataloader.get_dataloaders(num_worker=8)
 
+    model = CAERSNet(use_context=True, concat=True)
+    for idx, (face, context, label) in enumerate(train_loader):
+        y_pred = model(face, context)
+        exit()
     model = TonNet(model_name=configs["model"], num_classes=train_set.num_classes)
     if configs["optimizer"] == "sgd":
         optimizer = torch.optim.SGD(model.parameters(), lr=configs["lr"], momentum=0.9)
@@ -64,11 +71,5 @@ def train(parsing_args):
                                    backbone_name=configs["model"])
 
 if __name__ == "__main__":
-    # args = get_args()
-    # train(parsing_args=args)
-    dataset = UTKFace(root_dir="./data/UTKFace",
-                      mode = "train",
-                      sample_size=224,
-                      use_context=True)
-    dataset[0][1].show()
-    dataset[0][0].show()
+    args = get_args()
+    train(parsing_args=args)

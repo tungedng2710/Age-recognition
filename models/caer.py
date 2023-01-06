@@ -5,25 +5,25 @@ import torch.nn.functional as F
 
 from timm.models.layers import ConvNormAct, BatchNormAct2d
 
-class BaseModel(nn.Module):
-    """
-    Base class for all models
-    """
-    @abstractmethod
-    def forward(self, *inputs):
-        """
-        Forward pass logic
-        :return: Model output
-        """
-        raise NotImplementedError
+# class BaseModel(nn.Module):
+#     """
+#     Base class for all models
+#     """
+#     @abstractmethod
+#     def forward(self, *inputs):
+#         """
+#         Forward pass logic
+#         :return: Model output
+#         """
+#         raise NotImplementedError
 
-    def __str__(self):
-        """
-        Model prints with number of trainable parameters
-        """
-        model_parameters = filter(lambda p: p.requires_grad, self.parameters())
-        params = sum([np.prod(p.size()) for p in model_parameters])
-        return super().__str__() + '\nTrainable parameters: {}'.format(params)
+#     def __str__(self):
+#         """
+#         Model prints with number of trainable parameters
+#         """
+#         model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+#         params = sum([np.prod(p.size()) for p in model_parameters])
+#         return super().__str__() + '\nTrainable parameters: {}'.format(params)
 
 class Modified_RexNet150(nn.Module):
     def __init__(self):
@@ -68,17 +68,19 @@ class TwoStreamNetwork(nn.Module):
         num_kernels = [3, 32, 64, 128, 256, 256]
         self.face_encoding_module = Encoder(num_kernels)
         self.context_encoding_module = Encoder(num_kernels)
-        self.face_encoding_module = Modified_RexNet150()
-        self.context_encoding_module = Modified_RexNet150()
-        self.attention_inference_module = Encoder([256, 128, 1], max_pool=False)
+        self.attention_inference_module = Encoder(
+            [256, 128, 1], max_pool=False)
 
     def forward(self, face, context):
         face = self.face_encoding_module(face)
+
         context = self.context_encoding_module(context)
         attention = self.attention_inference_module(context)
         N, C, H, W = attention.shape
-        attention = F.softmax(attention.view(N, -1), dim=-1).view(N, C, H, W)
+        attention = F.softmax(attention.view(
+            N, -1), dim=-1).view(N, C, H, W)
         context = context * attention
+
         return face, context
 
 class FusionNetwork(nn.Module):
@@ -131,7 +133,7 @@ class FusionNetwork(nn.Module):
         features = self.dropout(features)
         return self.fc2(features)
 
-class CAERSNet(BaseModel):
+class CAERSNet():
     def __init__(self, use_face=True, use_context=True, concat=False):
         super().__init__()
         self.two_stream_net = TwoStreamNetwork()
